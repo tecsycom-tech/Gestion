@@ -755,7 +755,8 @@
       rows.forEach(row => {
         const tr = document.createElement('tr');
         tr.className = 'hover:bg-red-50/50 transition-colors';
-        tr.innerHTML = `
+        tr.innerHTML =
+          <td class="p-2.5 font-mono font-semibold text-slate-800">${getFieldValue(row, 'Estado')}</td>`
           <td class="p-2.5 font-mono font-semibold text-slate-800">${getFieldValue(row, 'dni_cliente')}</td>
           <td class="p-2.5 font-medium text-slate-800">${getFieldValue(row, 'nom_cliente')}</td>
           <td class="p-2.5 font-mono text-slate-500 text-[11px]">${getFieldValue(row, 'coordenadas_direccion')}</td>
