@@ -494,7 +494,9 @@
     const APPS_SCRIPT_WEBHOOK = "https://script.google.com/macros/s/AKfycbzfQjH_6tI5bR2M9uHnJnp15hPlYSl_uwJEGD55eQtpbeuLoEzbJGgkx-zcC8SiMaNr/exec";
     const TARGET_KEY_COL = "IDoperacion";
     const TARGET_STATUS_COL = "Estado";
-    const ALLOWED_UPDATE_STATUSES = ['EN CAMINO', 'EN PROCESO', 'PROGRAMADO'];
+    
+    // Incluidos estados de cierre como FINALIZADO/COMPLETADO/LIQUIDADO para permitir transiciones de estado hacia finalización
+    const ALLOWED_UPDATE_STATUSES = ['EN CAMINO', 'EN PROCESO', 'PROGRAMADO', 'FINALIZADO', 'COMPLETADO', 'LIQUIDADO', 'CANCELADO', 'ANULADO'];
 
     // Allowed status filters for the Cuadrilla Chart
     const TARGET_CUADRILLA_STATUSES = ['FINALIZADO', 'COMPLETADO', 'LIQUIDADO', 'EN CAMINO', 'EN PROCESO'];
@@ -853,25 +855,25 @@
       const currentMap = new Map();
       sheetDataBase.forEach(row => {
         const keyVal = getItemKeyValue(row, TARGET_KEY_COL);
-        if (keyVal) currentMap.set(keyVal, row);
+        if (keyVal) currentMap.set(keyVal.toLowerCase(), row);
       });
 
       // 1. Identify missing orders in Quantum upload
       const newUploadMap = new Map();
       parsedFileRows.forEach(row => {
         const keyVal = getItemKeyValue(row, TARGET_KEY_COL);
-        if (keyVal) newUploadMap.set(keyVal, row);
+        if (keyVal) newUploadMap.set(keyVal.toLowerCase(), row);
       });
 
       missingInQuantumOrders = sheetDataBase.filter(baseItem => {
         const baseId = getItemKeyValue(baseItem, TARGET_KEY_COL);
-        return baseId && !newUploadMap.has(baseId);
+        return baseId && !newUploadMap.has(baseId.toLowerCase());
       });
 
       // 2. Identify unassigned cuadrilla rows
       unassignedOrders = parsedFileRows.filter(item => {
         const cuadrilla = getItemCuadrillaValue(item);
-        return !cuadrilla || cuadrilla.toUpperCase() === 'VACIO' || cuadrilla.toUpperCase() === 'SIN CUADRILLA';
+        return !cuadrilla || cuadrilla.toUpperCase().trim() === 'VACIO' || cuadrilla.toUpperCase().trim() === 'SIN CUADRILLA';
       });
 
       parsedFileRows.forEach(incoming => {
@@ -879,20 +881,28 @@
         const incomingStatus = getItemStatusValue(incoming, TARGET_STATUS_COL);
         const incomingStatusUpper = incomingStatus.toUpperCase().trim();
 
-        if (incomingKey && currentMap.has(incomingKey)) {
-          const existingRow = currentMap.get(incomingKey);
+        if (incomingKey && currentMap.has(incomingKey.toLowerCase())) {
+          const existingRow = currentMap.get(incomingKey.toLowerCase());
           const currentStatus = getItemStatusValue(existingRow, TARGET_STATUS_COL);
+          const currentStatusUpper = currentStatus.toUpperCase().trim();
 
-          const isAllowedStatus = ALLOWED_UPDATE_STATUSES.includes(incomingStatusUpper);
+          // Compara si el nuevo estado es diferente al que figura en Sheets
+          if (incomingStatusUpper !== currentStatusUpper) {
+            // Verifica si es un estado válido/permitido para actualizar
+            const isAllowedStatus = ALLOWED_UPDATE_STATUSES.includes(incomingStatusUpper);
 
-          if (isAllowedStatus && incomingStatusUpper !== currentStatus.toUpperCase().trim()) {
-            analysisResult.updatedRows.push({
-              key: incomingKey,
-              oldStatus: currentStatus || 'Sin Estado',
-              newStatus: incomingStatusUpper,
-              fullData: incoming
-            });
+            if (isAllowedStatus) {
+              analysisResult.updatedRows.push({
+                key: incomingKey,
+                oldStatus: currentStatus || 'Sin Estado',
+                newStatus: incomingStatusUpper,
+                fullData: incoming
+              });
+            } else {
+              analysisResult.ignoredRows.push(incoming);
+            }
           } else {
+            // Si el estado entrante es exactamente igual al de Sheets, se ignora por no presentar cambios
             analysisResult.ignoredRows.push(incoming);
           }
         } else if (incomingKey) {
