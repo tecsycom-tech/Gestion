@@ -989,6 +989,8 @@
       btn.disabled = true;
       btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> <span>Actualizando en BASE AI...</span>`;
 
+      updateSyncStatus('FETCHING');
+
       try {
         await fetch(APPS_SCRIPT_WEBHOOK, {
           method: 'POST',
@@ -1007,6 +1009,7 @@
       } finally {
         btn.disabled = false;
         btn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> <span>Confirmar y Sincronizar</span>`;
+        updateSyncStatus('ONLINE');
         clearSelectedFile();
       }
     }
@@ -1027,10 +1030,11 @@
       });
 
       saveState();
+      // Refresca el Dashboard con los datos completos y actualizados de la HOJA BASE
       renderDashboard();
     }
 
-    // TAB DASHBOARD
+    // TAB DASHBOARD - Lee la información completa de la hoja BASE
     function renderDashboard() {
       const filterStatus = document.getElementById('dash-filter-status').value;
       const filterPeriod = document.getElementById('dash-filter-period').value;
@@ -1141,7 +1145,7 @@
       // Horizontal Bar Chart
       renderCuadrillaChart(filteredData);
 
-      // Resumen Matriz por Cuadrilla
+      // Resumen Matriz por Cuadrilla (Basado en la hoja BASE)
       const cuadrillaMap = {};
       const allStatusesSet = new Set();
 
