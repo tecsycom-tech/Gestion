@@ -1,0 +1,1346 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full bg-slate-50">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sistema de Gestión & Sincronización Operativa</title>
+  
+  <!-- Favicon de Gestión -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect width='7' height='9' x='3' y='3' rx='1'/><rect width='7' height='5' x='14' y='3' rx='1'/><rect width='7' height='9' x='14' y='12' rx='1'/><rect width='7' height='5' x='3' y='16' rx='1'/></svg>">
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- SheetJS para lectura de Excel / CSV -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  
+  <!-- Chart.js para visualización -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Chart.js Plugin Datalabels para mostrar números dentro del gráfico -->
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Google Fonts (Inter) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Alert Audio Sound Effects -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#eff6ff',
+              100: '#dbeafe',
+              200: '#bfdbfe',
+              500: '#3b82f6',
+              600: '#2563eb',
+              700: '#1d4ed8',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    @keyframes blink-border {
+        0%, 100% { border-color: rgba(225, 29, 72, 0.9); box-shadow: 0 0 15px rgba(225, 29, 72, 0.5); }
+        50% { border-color: rgba(239, 68, 68, 0.3); box-shadow: 0 0 2px rgba(225, 29, 72, 0.1); }
+    }
+    @keyframes blink-text {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.6; transform: scale(0.98); }
+    }
+    .animate-blink-card {
+        animation: blink-border 1.5s infinite ease-in-out;
+    }
+    .animate-blink-badge {
+        animation: blink-text 1s infinite ease-in-out;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 4px;
+    }
+  </style>
+</head>
+<body class="h-full bg-slate-50 text-slate-800 antialiased font-sans flex flex-col min-h-screen">
+
+  <!-- Header -->
+  <header class="bg-slate-900 text-white shadow-md sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <div class="flex items-center space-x-3">
+          <div class="p-2 bg-brand-600 rounded-xl text-white shadow-sm">
+            <i class="fa-solid fa-list-check text-xl"></i>
+          </div>
+          <div>
+            <h1 class="text-base sm:text-lg font-bold tracking-tight">Sistema de Sincronización Operativa</h1>
+            <p class="text-[11px] text-slate-400">Gestión de datos de operaciones en Google Sheets (BASE AI)</p>
+          </div>
+        </div>
+
+        <!-- Desktop Navigation Tabs -->
+        <nav class="hidden md:flex space-x-2">
+          <button id="nav-tab-sync" onclick="switchTab('tab-sync')" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 bg-brand-600 text-white shadow">
+            <i class="fa-solid fa-cloud-arrow-up"></i>
+            <span>Carga & Sincronización</span>
+          </button>
+          <button id="nav-tab-dashboard" onclick="switchTab('tab-dashboard')" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800 transition-all flex items-center gap-2">
+            <i class="fa-solid fa-chart-pie"></i>
+            <span>Dashboard KPI</span>
+          </button>
+        </nav>
+
+        <!-- Status Pill -->
+        <div class="flex items-center space-x-2 bg-slate-800 px-3 py-1.5 rounded-full border border-slate-700">
+          <span id="sync-status-dot" class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span id="sync-status-text" class="text-xs font-semibold text-slate-300">Conectado y En Línea</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Mobile Tab Bar -->
+  <div class="md:hidden bg-slate-900 border-t border-slate-800 flex justify-around p-2 sticky top-16 z-30">
+    <button id="mobile-tab-sync" onclick="switchTab('tab-sync')" class="mobile-tab-btn flex flex-col items-center text-xs font-medium text-brand-400">
+      <i class="fa-solid fa-cloud-arrow-up text-base"></i>
+      <span>Cargar</span>
+    </button>
+    <button id="mobile-tab-dashboard" onclick="switchTab('tab-dashboard')" class="mobile-tab-btn flex flex-col items-center text-xs font-medium text-slate-400">
+      <i class="fa-solid fa-chart-pie text-base"></i>
+      <span>Dashboard</span>
+    </button>
+  </div>
+
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+    <!-- ========================================================================= -->
+    <!-- TAB 1: CARGA & SINCRONIZACIÓN -->
+    <!-- ========================================================================= -->
+    <section id="tab-sync" class="tab-content space-y-4">
+
+      <!-- Top Summary Metrics Grid -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div class="bg-slate-800 text-white p-3.5 rounded-xl shadow-sm relative overflow-hidden">
+              <div class="flex justify-between items-center">
+                  <div>
+                      <p class="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Total en Base (Sheets)</p>
+                      <h3 id="statTotalBase" class="text-2xl font-extrabold mt-0.5 text-white">0</h3>
+                  </div>
+                  <span class="p-2.5 bg-slate-700/60 rounded-lg text-indigo-400">
+                      <i class="fas fa-database text-lg"></i>
+                  </span>
+              </div>
+          </div>
+
+          <div class="bg-white p-3.5 rounded-xl shadow-sm border border-slate-200 relative overflow-hidden">
+              <div class="flex justify-between items-center">
+                  <div>
+                      <p class="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Órdenes en Archivo</p>
+                      <h3 id="statTotalArchivo" class="text-2xl font-extrabold mt-0.5 text-slate-800">0</h3>
+                  </div>
+                  <span class="p-2.5 bg-blue-50 rounded-lg text-blue-600">
+                      <i class="fas fa-file-excel text-lg"></i>
+                  </span>
+              </div>
+          </div>
+
+          <div class="bg-white p-3.5 rounded-xl shadow-sm border border-amber-200/80 bg-amber-50/20 relative overflow-hidden">
+              <div class="flex justify-between items-center">
+                  <div>
+                      <p class="text-[10px] uppercase tracking-wider text-amber-700 font-bold">Sin Cuadrilla Asignada</p>
+                      <h3 id="statSinCuadrilla" class="text-2xl font-extrabold mt-0.5 text-amber-600">0</h3>
+                  </div>
+                  <span class="p-2.5 bg-amber-100 rounded-lg text-amber-600">
+                      <i class="fas fa-user-slash text-lg"></i>
+                  </span>
+              </div>
+          </div>
+
+          <div id="missingCard" class="bg-rose-50/50 p-3.5 rounded-xl border border-rose-300 relative overflow-hidden transition-all duration-300">
+              <div class="flex justify-between items-center">
+                  <div>
+                      <p class="text-[10px] uppercase tracking-wider text-rose-700 font-bold flex items-center gap-1">
+                          <i class="fas fa-exclamation-circle text-rose-600 animate-bounce"></i> No figura en Quantum
+                      </p>
+                      <h3 id="statMissingQuantum" class="text-2xl font-extrabold mt-0.5 text-rose-600">0</h3>
+                  </div>
+                  <span class="p-2.5 bg-rose-100 rounded-lg text-rose-600">
+                      <i class="fas fa-ghost text-lg"></i>
+                  </span>
+              </div>
+          </div>
+      </div>
+
+      <!-- ALERTA CRÍTICA PARPADEANTE: ÓRDEN NO FIGURA EN QUANTUM -->
+      <div id="panelMissingQuantum" class="hidden bg-gradient-to-r from-rose-950/5 via-rose-50 to-amber-50/30 rounded-xl border-2 border-rose-500/80 p-3.5 shadow-md animate-blink-card">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-2 pb-2 border-b border-rose-200/60">
+              <div class="flex items-center gap-2">
+                  <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-600 text-white shadow">
+                      <i class="fas fa-triangle-exclamation text-xs animate-pulse"></i>
+                  </span>
+                  <div class="flex items-center gap-2">
+                      <h3 class="text-sm font-black text-rose-950 uppercase tracking-tight">Órden no figura en Quantum</h3>
+                      <span id="badgeMissingCount" class="bg-rose-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold animate-blink-badge">0 Registros</span>
+                  </div>
+              </div>
+              <button onclick="exportMissingToCSV()" class="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shadow">
+                  <i class="fas fa-download text-[11px]"></i> Exportar Inconsistencias
+              </button>
+          </div>
+
+          <div class="overflow-x-auto custom-scrollbar max-h-48">
+              <table class="w-full text-left text-xs border-collapse">
+                  <thead>
+                      <tr class="bg-rose-100/90 text-rose-900 uppercase font-bold text-[11px] border-b border-rose-200 sticky top-0 backdrop-blur-sm whitespace-nowrap">
+                          <th class="p-2">Estado</th>
+                          <th class="p-2">DNI Cliente</th>
+                          <th class="p-2">Nom Cliente</th>
+                          <th class="p-2">Coordenadas Dirección</th>
+                          <th class="p-2">Dirección Cliente</th>
+                          <th class="p-2">Distrito</th>
+                          <th class="p-2">Teléfono</th>
+                          <th class="p-2">Cuadrilla</th>
+                      </tr>
+                  </thead>
+                  <tbody id="tblMissingQuantum" class="divide-y divide-rose-100 bg-white/90">
+                      <!-- Dynamic rows inserted here -->
+                  </tbody>
+              </table>
+          </div>
+      </div>
+
+      <!-- ALERTA DE CUADRILLA VACÍA -->
+      <div id="panelUnassigned" class="hidden bg-amber-50/60 rounded-xl border border-amber-200 p-3.5 shadow-sm">
+          <div class="flex items-center justify-between mb-2 pb-2 border-b border-amber-200/60">
+              <div class="flex items-center gap-2">
+                  <span class="p-1.5 bg-amber-500 text-white rounded-md text-xs">
+                      <i class="fas fa-user-clock"></i>
+                  </span>
+                  <div>
+                      <h3 class="text-sm font-bold text-amber-900">Órdenes sin Cuadrilla Asignada</h3>
+                  </div>
+              </div>
+              <span id="badgeUnassignedCount" class="bg-amber-200 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-md">0 Órdenes</span>
+          </div>
+
+          <div class="overflow-x-auto custom-scrollbar max-h-48">
+              <table class="w-full text-left text-xs border-collapse">
+                  <thead>
+                      <tr class="bg-amber-100/80 text-amber-900 font-bold border-b border-amber-200 sticky top-0 backdrop-blur-sm whitespace-nowrap">
+                          <th class="p-2">Estado</th>
+                          <th class="p-2">DNI Cliente</th>
+                          <th class="p-2">Nom Cliente</th>
+                          <th class="p-2">Coordenadas Dirección</th>
+                          <th class="p-2">Dirección Cliente</th>
+                          <th class="p-2">Distrito</th>
+                          <th class="p-2">Teléfono</th>
+                          <th class="p-2">Cuadrilla</th>
+                      </tr>
+                  </thead>
+                  <tbody id="tblUnassigned" class="divide-y divide-amber-100 bg-white">
+                      <!-- Dynamic rows inserted here -->
+                  </tbody>
+              </table>
+          </div>
+      </div>
+
+      <!-- Main Upload Panel COMPACTO (Sin Bitácora) -->
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          
+          <!-- Drop Zone Compacta -->
+          <div id="drop-zone" class="flex-1 border-2 border-dashed border-slate-300 hover:border-brand-500 rounded-xl p-3 text-center bg-slate-50 hover:bg-brand-50/50 transition-all cursor-pointer relative">
+            <input type="file" id="file-input" accept=".xlsx, .xls, .csv" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+            <div class="flex items-center justify-center gap-3 pointer-events-none">
+              <div class="w-8 h-8 bg-brand-100 text-brand-600 rounded-lg flex items-center justify-center text-base">
+                <i class="fa-solid fa-cloud-arrow-up"></i>
+              </div>
+              <div class="text-left">
+                <p class="text-xs font-bold text-slate-700">Arrastra o haz clic para subir tu archivo (.xlsx / .csv)</p>
+                <p class="text-[10px] text-slate-400">Procesa datos para comparar con Google Sheets (BASE AI)</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Acciones -->
+          <div class="flex items-center gap-2">
+            <button id="btn-analyze" onclick="analyzeAndSync()" disabled class="px-4 py-2 bg-brand-600 text-white text-xs font-bold rounded-lg hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm flex items-center gap-1.5 whitespace-nowrap">
+              <i class="fa-solid fa-magnifying-glass-chart"></i>
+              <span id="btn-analyze-text">Analizar Datos</span>
+            </button>
+
+            <button id="btn-confirm-send" onclick="sendPayloadToGoogleSheets()" disabled class="px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm flex items-center gap-1.5 whitespace-nowrap">
+              <i class="fa-solid fa-paper-plane"></i>
+              <span>Confirmar y Sincronizar</span>
+            </button>
+          </div>
+
+        </div>
+
+        <!-- File info badge -->
+        <div id="file-info" class="hidden mt-2 p-2 bg-brand-50 border border-brand-200 rounded-lg flex items-center justify-between">
+          <div class="flex items-center space-x-2">
+            <i class="fa-solid fa-file-excel text-brand-600 text-base"></i>
+            <p id="file-name" class="font-semibold text-slate-800 text-xs">archivo.xlsx</p>
+            <span class="text-slate-300">•</span>
+            <p id="file-details" class="text-xs text-slate-500">0 KB • 0 filas</p>
+          </div>
+          <button type="button" onclick="clearSelectedFile()" class="text-slate-400 hover:text-red-500 p-1 transition-colors">
+            <i class="fa-solid fa-circle-xmark text-sm"></i>
+          </button>
+        </div>
+
+        <!-- Progress Bar -->
+        <div id="progress-container" class="hidden mt-2 space-y-1">
+          <div class="flex justify-between text-[11px] font-semibold text-slate-600">
+            <span id="progress-status">Obteniendo registros...</span>
+            <span id="progress-percent">0%</span>
+          </div>
+          <div class="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
+            <div id="progress-bar" class="bg-brand-600 h-1.5 rounded-full transition-all duration-300 w-0"></div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Summary Card -->
+      <div id="summary-card" class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 hidden">
+        <h3 class="text-xs font-bold text-slate-800 mb-3 flex items-center gap-1.5">
+          <i class="fa-solid fa-list-check text-brand-600"></i> Resultado de la Comparación
+        </h3>
+        
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+          <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-2.5 text-center">
+            <p class="text-[10px] text-emerald-700 font-bold uppercase tracking-wider">Nuevos Registros</p>
+            <p id="stat-new-count" class="text-xl font-black text-emerald-600">0</p>
+          </div>
+          
+          <div class="bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-center">
+            <p class="text-[10px] text-amber-700 font-bold uppercase tracking-wider">Cambios Permitidos</p>
+            <p id="stat-updated-count" class="text-xl font-black text-amber-600">0</p>
+          </div>
+
+          <div class="bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-center">
+            <p class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Sin Modificación</p>
+            <p id="stat-ignored-count" class="text-xl font-black text-slate-600">0</p>
+          </div>
+        </div>
+
+        <!-- Preview Data Table -->
+        <div class="overflow-x-auto border border-slate-200 rounded-lg max-h-40 custom-scrollbar">
+          <table class="w-full text-left text-xs text-slate-600">
+            <thead class="bg-slate-100 text-slate-700 uppercase font-semibold border-b border-slate-200 sticky top-0 backdrop-blur-sm">
+              <tr>
+                <th class="p-2">Acción</th>
+                <th class="p-2">IDoperacion</th>
+                <th class="p-2">Estado Actual</th>
+                <th class="p-2">Nuevo Estado</th>
+                <th class="p-2">Detalle</th>
+              </tr>
+            </thead>
+            <tbody id="preview-table-body" class="divide-y divide-slate-200 bg-white">
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ========================================================================= -->
+    <!-- TAB 2: DASHBOARD KPI & MÉTRICAS -->
+    <!-- ========================================================================= -->
+    <section id="tab-dashboard" class="tab-content hidden space-y-4">
+      
+      <!-- Filters Bar -->
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-3 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 class="text-sm font-bold text-slate-800">Panel de Control & Indicadores KPI</h2>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2 text-xs">
+          <div>
+            <select id="dash-filter-status" onchange="renderDashboard()" class="border border-slate-300 rounded-lg px-2.5 py-1 bg-slate-50 font-medium text-xs focus:ring-2 focus:ring-brand-500 outline-none">
+              <option value="ALL">Todos los Estados</option>
+            </select>
+          </div>
+          <div>
+            <select id="dash-filter-period" onchange="renderDashboard()" class="border border-slate-300 rounded-lg px-2.5 py-1 bg-slate-50 font-medium text-xs focus:ring-2 focus:ring-brand-500 outline-none">
+              <option value="ALL">Todo el Histórico</option>
+              <option value="TODAY">Hoy</option>
+            </select>
+          </div>
+          <button onclick="renderDashboard()" class="px-2.5 py-1 bg-slate-800 text-white rounded-lg hover:bg-slate-700 transition-colors">
+            <i class="fa-solid fa-rotate text-xs"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- KPI Grid -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        
+        <div class="bg-white rounded-xl p-3.5 shadow-sm border border-slate-200 flex items-center justify-between">
+          <div>
+            <p class="text-[10px] font-bold text-slate-400 uppercase">Total Operaciones</p>
+            <h3 id="dash-kpi-total" class="text-2xl font-black text-slate-800 mt-0.5">0</h3>
+          </div>
+          <div class="w-10 h-10 bg-brand-50 text-brand-600 rounded-lg flex items-center justify-center text-lg">
+            <i class="fa-solid fa-folder-open"></i>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl p-3.5 shadow-sm border border-slate-200 flex items-center justify-between">
+          <div>
+            <p class="text-[10px] font-bold text-slate-400 uppercase">Nuevos en Carga</p>
+            <h3 id="dash-kpi-new" class="text-2xl font-black text-emerald-600 mt-0.5">0</h3>
+          </div>
+          <div class="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-lg flex items-center justify-center text-lg">
+            <i class="fa-solid fa-user-plus"></i>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl p-3.5 shadow-sm border border-slate-200 flex items-center justify-between">
+          <div>
+            <p class="text-[10px] font-bold text-slate-400 uppercase">Estados Modificados</p>
+            <h3 id="dash-kpi-updates" class="text-2xl font-black text-amber-600 mt-0.5">0</h3>
+          </div>
+          <div class="w-10 h-10 bg-amber-50 text-amber-600 rounded-lg flex items-center justify-center text-lg">
+            <i class="fa-solid fa-pen-to-square"></i>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl p-3.5 shadow-sm border border-slate-200 flex items-center justify-between">
+          <div>
+            <p class="text-[10px] font-bold text-slate-400 uppercase">Estado Principal</p>
+            <h3 id="dash-kpi-top-status" class="text-base font-black text-indigo-600 mt-0.5 truncate max-w-[110px]">-</h3>
+            <p id="dash-kpi-top-status-sub" class="text-[10px] text-indigo-500 font-semibold">0% del total</p>
+          </div>
+          <div class="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center text-lg">
+            <i class="fa-solid fa-chart-simple"></i>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Charts Section -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        
+        <!-- Pie Chart (Dona con valor al centro) -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+          <h3 class="text-xs font-bold text-slate-800 mb-2 flex items-center">
+            <i class="fa-solid fa-chart-pie text-brand-600 mr-1.5"></i>Distribución Global por Estado
+          </h3>
+          <div class="relative h-64 flex items-center justify-center">
+            <canvas id="chart-status"></canvas>
+          </div>
+        </div>
+
+        <!-- Horizontal Bar Chart (Filtrado para FINALIZADO, EN CAMINO, EN PROCESO con valor interno) -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-xs font-bold text-slate-800 flex items-center">
+              <i class="fa-solid fa-people-group text-brand-600 mr-1.5"></i>Órdenes por Cuadrilla y Estado
+            </h3>
+            <span class="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-semibold">FINALIZADO • EN CAMINO • EN PROCESO</span>
+          </div>
+          <div class="relative h-64">
+            <canvas id="cuadrillaChart"></canvas>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Matriz Resumen -->
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+        <h3 class="text-xs font-bold text-slate-800 mb-2 flex items-center">
+          <i class="fa-solid fa-table-cells text-brand-600 mr-1.5"></i> Resumen Numérico por Técnico / Cuadrilla
+        </h3>
+        <div class="overflow-x-auto border border-slate-200 rounded-lg max-h-56 custom-scrollbar">
+          <table id="matrix-cuadrillas-table" class="w-full text-left text-xs text-slate-700">
+            <thead id="matrix-head" class="bg-slate-100 uppercase font-semibold text-slate-600 border-b border-slate-200 sticky top-0 backdrop-blur-sm whitespace-nowrap">
+            </thead>
+            <tbody id="matrix-body" class="divide-y divide-slate-200 bg-white">
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- Toast Container -->
+  <div id="toast-container" class="fixed bottom-4 right-4 z-50 space-y-2 pointer-events-none"></div>
+
+  <!-- JS LOGIC -->
+  <script>
+    // Register ChartJS DataLabels Plugin
+    Chart.register(ChartDataLabels);
+
+    const APPS_SCRIPT_WEBHOOK = "https://script.google.com/macros/s/AKfycbzfQjH_6tI5bR2M9uHnJnp15hPlYSl_uwJEGD55eQtpbeuLoEzbJGgkx-zcC8SiMaNr/exec";
+    const TARGET_KEY_COL = "IDoperacion";
+    const TARGET_STATUS_COL = "Estado";
+
+    // Allowed status filters for the Cuadrilla Chart
+    const TARGET_CUADRILLA_STATUSES = ['FINALIZADO', 'COMPLETADO', 'LIQUIDADO', 'EN CAMINO', 'EN PROCESO'];
+
+    // SIN CACHÉ LOCAL: La base inicia completamente vacía en cada ejecución
+    let sheetDataBase = [];
+    let parsedFileRows = [];
+    let missingInQuantumOrders = [];
+    let unassignedOrders = [];
+    let chartCuadrillaInstance = null;
+    let chartStatusInstance = null;
+    let analysisResult = { newRows: [], updatedRows: [], ignoredRows: [], unassignedRows: [] };
+
+    // Format Coordenadas as clickable Google Maps link
+    function formatCoordinatesLink(coords) {
+        if (!coords || coords === '-') return '-';
+        const cleaned = coords.toString().trim();
+        if (/^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/.test(cleaned)) {
+            return `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cleaned)}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 underline font-mono text-[11px] flex items-center gap-1">
+                <i class="fa-solid fa-location-dot text-rose-500"></i> ${cleaned}
+            </a>`;
+        }
+        return `<span class="font-mono text-slate-700 text-[11px]">${cleaned}</span>`;
+    }
+
+    // Format helper for alert table rows (Encabezados: Estado, DNI Cliente, Nom Cliente, Coordenadas Dirección, Dirección Cliente, Distrito, Teléfono, Cuadrilla)
+    function renderOrderRow(item, isMissingAlert = false) {
+        const bgClass = isMissingAlert ? 'hover:bg-rose-50/80 transition' : 'hover:bg-amber-50/50 transition';
+        const coords = item.coordenadas_direccion || item.coordenadas || '-';
+        
+        return `
+            <tr class="${bgClass} whitespace-nowrap">
+                <td class="p-2">
+                    <span class="px-2 py-0.5 rounded text-[10px] font-bold ${getStatusBadgeStyle(item.Estado || item.estado)}">
+                        ${item.Estado || item.estado || 'PENDIENTE'}
+                    </span>
+                </td>
+                <td class="p-2 font-mono text-slate-700">${item.dni_cliente || item.dni || '-'}</td>
+                <td class="p-2 font-medium text-slate-800">${item.nom_cliente || item.nombre_cliente || '-'}</td>
+                <td class="p-2">${formatCoordinatesLink(coords)}</td>
+                <td class="p-2 truncate max-w-xs" title="${item.direccion_cliente || ''}">${item.direccion_cliente || item.direccion || '-'}</td>
+                <td class="p-2">${item.Distrito || item.distrito || '-'}</td>
+                <td class="p-2">${item.telefono || item.celular || '-'}</td>
+                <td class="p-2">
+                    <span class="px-2 py-0.5 rounded text-[11px] font-semibold ${item.Cuadrilla ? 'bg-indigo-50 text-indigo-700' : 'bg-red-100 text-red-700'}">
+                        ${item.Cuadrilla || item.cuadrilla || 'SIN CUADRILLA'}
+                    </span>
+                </td>
+            </tr>
+        `;
+    }
+
+    function getStatusBadgeStyle(status) {
+        const st = (status || '').toString().toUpperCase();
+        if (st.includes('CAMINO')) return 'bg-sky-100 text-sky-800 border border-sky-200';
+        if (st.includes('PROCESO')) return 'bg-indigo-100 text-indigo-800 border border-indigo-200';
+        if (st.includes('PROGRAMADO')) return 'bg-amber-100 text-amber-800 border border-amber-200';
+        if (st.includes('FINALIZADO') || st.includes('COMPLETADO') || st.includes('LIQUIDADO')) return 'bg-emerald-100 text-emerald-800 border border-emerald-200';
+        if (st.includes('CANCELADO') || st.includes('ANULADO')) return 'bg-rose-100 text-rose-800 border border-rose-200';
+        return 'bg-slate-100 text-slate-700 border border-slate-200';
+    }
+
+    function updateUIWithAnalysis(baseData, newData) {
+        document.getElementById('statTotalBase').textContent = baseData.length.toLocaleString();
+        document.getElementById('statTotalArchivo').textContent = newData.length.toLocaleString();
+        document.getElementById('statSinCuadrilla').textContent = unassignedOrders.length.toLocaleString();
+        document.getElementById('statMissingQuantum').textContent = missingInQuantumOrders.length.toLocaleString();
+
+        // Panel: Órden no figura en Quantum
+        const panelMissing = document.getElementById('panelMissingQuantum');
+        const tblMissing = document.getElementById('tblMissingQuantum');
+        const badgeMissing = document.getElementById('badgeMissingCount');
+
+        if (missingInQuantumOrders.length > 0) {
+            panelMissing.classList.remove('hidden');
+            badgeMissing.textContent = `${missingInQuantumOrders.length} Registros`;
+            tblMissing.innerHTML = missingInQuantumOrders.map(item => renderOrderRow(item, true)).join('');
+            
+            try {
+                const synth = new Tone.Synth().toDestination();
+                synth.triggerAttackRelease("C5", "8n");
+            } catch(e) {}
+        } else {
+            panelMissing.classList.add('hidden');
+        }
+
+        // Panel: Sin Cuadrilla
+        const panelUnassigned = document.getElementById('panelUnassigned');
+        const tblUnassigned = document.getElementById('tblUnassigned');
+        const badgeUnassigned = document.getElementById('badgeUnassignedCount');
+
+        if (unassignedOrders.length > 0) {
+            panelUnassigned.classList.remove('hidden');
+            badgeUnassigned.textContent = `${unassignedOrders.length} Órdenes`;
+            tblUnassigned.innerHTML = unassignedOrders.map(item => renderOrderRow(item, false)).join('');
+        } else {
+            panelUnassigned.classList.add('hidden');
+        }
+
+        renderCuadrillaChart(newData.length > 0 ? newData : baseData);
+    }
+
+    // Stacked horizontal bar chart (Filtrado solo para FINALIZADO, EN CAMINO, EN PROCESO)
+    function renderCuadrillaChart(dataset) {
+        const canvas = document.getElementById('cuadrillaChart');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        
+        const cuadrillasMap = {};
+
+        dataset.forEach(row => {
+            const cuadrilla = (row.Cuadrilla || row.cuadrilla || 'SIN ASIGNAR').toString().trim() || 'SIN ASIGNAR';
+            let rawStatus = (row.Estado || row.estado || '').toString().trim().toUpperCase();
+
+            // Normalizar estado finalizado
+            if (rawStatus === 'COMPLETADO' || rawStatus === 'LIQUIDADO') {
+                rawStatus = 'FINALIZADO';
+            }
+
+            if (['FINALIZADO', 'EN CAMINO', 'EN PROCESO'].includes(rawStatus)) {
+                if (!cuadrillasMap[cuadrilla]) cuadrillasMap[cuadrilla] = { 'FINALIZADO': 0, 'EN CAMINO': 0, 'EN PROCESO': 0 };
+                cuadrillasMap[cuadrilla][rawStatus] = (cuadrillasMap[cuadrilla][rawStatus] || 0) + 1;
+            }
+        });
+
+        const labels = Object.keys(cuadrillasMap).sort();
+
+        const statusColors = {
+            'FINALIZADO': '#10b981', // Verde
+            'EN CAMINO': '#0284c7',  // Azul
+            'EN PROCESO': '#6366f1'  // Púrpura
+        };
+
+        const targetStatuses = ['FINALIZADO', 'EN CAMINO', 'EN PROCESO'];
+
+        const datasets = targetStatuses.map(status => {
+            return {
+                label: status,
+                data: labels.map(c => cuadrillasMap[c][status] || 0),
+                backgroundColor: statusColors[status],
+                borderRadius: 4
+            };
+        });
+
+        if (chartCuadrillaInstance) chartCuadrillaInstance.destroy();
+
+        chartCuadrillaInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels.length ? labels : ['Sin Datos'],
+                datasets: datasets
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'top', labels: { boxWidth: 10, font: { family: 'Inter', size: 10 } } },
+                    tooltip: { mode: 'index', intersect: false },
+                    datalabels: {
+                        color: '#ffffff',
+                        font: { weight: 'bold', size: 10 },
+                        formatter: (value) => (value > 0 ? value : ''),
+                        anchor: 'center',
+                        align: 'center'
+                    }
+                },
+                scales: {
+                    x: { stacked: true, grid: { color: '#f1f5f9' }, ticks: { precision: 0 } },
+                    y: { stacked: true, grid: { display: false }, ticks: { font: { size: 10 } } }
+                }
+            }
+        });
+    }
+
+    function exportMissingToCSV() {
+        if (!missingInQuantumOrders.length) return;
+        
+        const headers = ["Estado", "dni_cliente", "nom_cliente", "coordenadas_direccion", "direccion_cliente", "Distrito", "telefono", "Cuadrilla"];
+        const rows = missingInQuantumOrders.map(o => [
+            `"${o.Estado || ''}"`,
+            `"${o.dni_cliente || ''}"`,
+            `"${o.nom_cliente || ''}"`,
+            `"${o.coordenadas_direccion || ''}"`,
+            `"${o.direccion_cliente || ''}"`,
+            `"${o.Distrito || ''}"`,
+            `"${o.telefono || ''}"`,
+            `"${o.Cuadrilla || ''}"`
+        ]);
+
+        const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `ordenes_no_figuran_in_quantum_${new Date().toISOString().slice(0,10)}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    // Init Event Listeners
+    window.addEventListener('DOMContentLoaded', () => {
+      const dropZone = document.getElementById('drop-zone');
+      const fileInput = document.getElementById('file-input');
+
+      if (fileInput) {
+        fileInput.addEventListener('change', (e) => {
+          if (e.target.files && e.target.files.length > 0) {
+            processSelectedFile(e.target.files[0]);
+          }
+        });
+      }
+
+      if (dropZone) {
+        ['dragenter', 'dragover'].forEach(eventName => {
+          dropZone.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.classList.add('border-brand-500', 'bg-brand-50');
+          }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+          dropZone.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.classList.remove('border-brand-500', 'bg-brand-50');
+          }, false);
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+          const dt = e.dataTransfer;
+          if (dt && dt.files && dt.files.length > 0) {
+            fileInput.files = dt.files;
+            processSelectedFile(dt.files[0]);
+          }
+        });
+      }
+    });
+
+    function processSelectedFile(file) {
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          
+          parsedFileRows = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+          if (parsedFileRows.length === 0) {
+            showToast('El archivo cargado no contiene registros válidos', 'error');
+            return;
+          }
+
+          document.getElementById('file-info').classList.remove('hidden');
+          document.getElementById('file-name').innerText = file.name;
+          document.getElementById('file-details').innerText = `${(file.size / 1024).toFixed(1)} KB • ${parsedFileRows.length} filas detectadas`;
+          
+          document.getElementById('btn-analyze').disabled = false;
+          document.getElementById('btn-confirm-send').disabled = true;
+          document.getElementById('summary-card').classList.add('hidden');
+
+          showToast(`Archivo "${file.name}" cargado correctamente`, 'success');
+
+        } catch (err) {
+          console.error('Error al procesar archivo:', err);
+          showToast('Error al procesar el archivo Excel o CSV', 'error');
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function clearSelectedFile() {
+      document.getElementById('file-input').value = '';
+      document.getElementById('file-info').classList.add('hidden');
+      document.getElementById('btn-analyze').disabled = true;
+      document.getElementById('btn-confirm-send').disabled = true;
+      document.getElementById('summary-card').classList.add('hidden');
+      parsedFileRows = [];
+    }
+
+    function getItemKeyValue(item, keyName) {
+      if (!item) return '';
+      const normalizedTarget = keyName.replace(/\s+/g, '').toLowerCase();
+      for (let k of Object.keys(item)) {
+        if (k.replace(/\s+/g, '').toLowerCase() === normalizedTarget) {
+          return String(item[k]).trim();
+        }
+      }
+      return '';
+    }
+
+    function getItemStatusValue(item, statusName) {
+      if (!item) return '';
+      const normalizedTarget = statusName.trim().toLowerCase();
+      for (let k of Object.keys(item)) {
+        if (k.trim().toLowerCase() === normalizedTarget) {
+          return String(item[k]).trim();
+        }
+      }
+      return '';
+    }
+
+    function getItemCuadrillaValue(item) {
+      if (!item) return '';
+      for (let k of Object.keys(item)) {
+        if (k.trim().toLowerCase() === 'cuadrilla') {
+          return String(item[k]).trim();
+        }
+      }
+      return '';
+    }
+
+    async function fetchRemoteGoogleSheetData() {
+      updateSyncStatus('FETCHING');
+      try {
+        const response = await fetch(`${APPS_SCRIPT_WEBHOOK}?action=read`);
+        if (response.ok) {
+          const remoteData = await response.json();
+          // Soportar diferentes estructuras de respuesta de Apps Script
+          if (Array.isArray(remoteData)) {
+            sheetDataBase = remoteData;
+          } else if (remoteData && Array.isArray(remoteData.data)) {
+            sheetDataBase = remoteData.data;
+          } else if (remoteData && Array.isArray(remoteData.rows)) {
+            sheetDataBase = remoteData.rows;
+          } else if (remoteData && Array.isArray(remoteData.result)) {
+            sheetDataBase = remoteData.result;
+          } else {
+            sheetDataBase = [];
+          }
+        } else {
+          sheetDataBase = [];
+        }
+      } catch (err) {
+        console.log('Obteniendo registros de hoja remota o base limpia:', err);
+        sheetDataBase = [];
+      } finally {
+        updateSyncStatus('ONLINE');
+      }
+    }
+
+    function getItemKeyValue(item, keyName) {
+      if (!item) return '';
+      const normalizedTarget = keyName.replace(/[\s_]+/g, '').toLowerCase();
+      for (let k of Object.keys(item)) {
+        if (k.replace(/[\s_]+/g, '').toLowerCase() === normalizedTarget) {
+          return String(item[k]).trim();
+        }
+      }
+      return '';
+    }
+
+    function getItemStatusValue(item, statusName) {
+      if (!item) return '';
+      const normalizedTarget = statusName.replace(/[\s_]+/g, '').toLowerCase();
+      for (let k of Object.keys(item)) {
+        const keyNorm = k.replace(/[\s_]+/g, '').toLowerCase();
+        if (keyNorm === normalizedTarget || keyNorm === 'estado' || keyNorm === 'estadooperativo') {
+          return String(item[k]).trim();
+        }
+      }
+      return '';
+    }
+
+    function getItemCuadrillaValue(item) {
+      if (!item) return '';
+      for (let k of Object.keys(item)) {
+        const normKey = k.replace(/[\s_]+/g, '').toLowerCase();
+        if (normKey === 'cuadrilla') {
+          return String(item[k]).trim();
+        }
+      }
+      return '';
+    }
+
+    async function analyzeAndSync() {
+      if (parsedFileRows.length === 0) return;
+
+      const progressContainer = document.getElementById('progress-container');
+      const progressBar = document.getElementById('progress-bar');
+      const progressStatus = document.getElementById('progress-status');
+      const progressPercent = document.getElementById('progress-percent');
+
+      progressContainer.classList.remove('hidden');
+      progressBar.style.width = '30%';
+      progressStatus.innerText = 'Consultando registros vigentes en la hoja BASE AI...';
+      progressPercent.innerText = '30%';
+
+      // Reiniciar base de datos de Sheets en cero siempre antes de consultar
+      sheetDataBase = [];
+
+      // Consulta limpia a Google Sheets
+      await fetchRemoteGoogleSheetData();
+
+      progressBar.style.width = '70%';
+      progressStatus.innerText = 'Analizando IDoperacion, Cuadrillas y Estados...';
+      progressPercent.innerText = '70%';
+
+      analysisResult = { newRows: [], updatedRows: [], ignoredRows: [], unassignedRows: [] };
+
+      const currentMap = new Map();
+      sheetDataBase.forEach(row => {
+        const keyVal = getItemKeyValue(row, TARGET_KEY_COL);
+        if (keyVal) currentMap.set(keyVal.toLowerCase(), row);
+      });
+
+      // 1. Identificar registros que están en Google Sheets pero ya no están en el nuevo archivo
+      const newUploadMap = new Map();
+      parsedFileRows.forEach(row => {
+        const keyVal = getItemKeyValue(row, TARGET_KEY_COL);
+        if (keyVal) newUploadMap.set(keyVal.toLowerCase(), row);
+      });
+
+      if (sheetDataBase.length > 0) {
+        missingInQuantumOrders = sheetDataBase.filter(baseItem => {
+          const baseId = getItemKeyValue(baseItem, TARGET_KEY_COL);
+          return baseId && !newUploadMap.has(baseId.toLowerCase());
+        });
+      } else {
+        missingInQuantumOrders = [];
+      }
+
+      // 2. Identificar filas sin cuadrilla asignada
+      unassignedOrders = parsedFileRows.filter(item => {
+        const cuadrilla = getItemCuadrillaValue(item);
+        return !cuadrilla || cuadrilla.toUpperCase().trim() === 'VACIO' || cuadrilla.toUpperCase().trim() === 'SIN CUADRILLA';
+      });
+
+      parsedFileRows.forEach(incoming => {
+        const incomingKey = getItemKeyValue(incoming, TARGET_KEY_COL);
+        const incomingStatus = getItemStatusValue(incoming, TARGET_STATUS_COL);
+        const incomingStatusUpper = incomingStatus.toUpperCase().trim();
+
+        if (incomingKey && currentMap.has(incomingKey.toLowerCase())) {
+          const existingRow = currentMap.get(incomingKey.toLowerCase());
+          const currentStatus = getItemStatusValue(existingRow, TARGET_STATUS_COL);
+          const currentStatusUpper = currentStatus.toUpperCase().trim();
+
+          // Compara si el estado en el archivo cargado es diferente al de la Hoja Base
+          if (incomingStatusUpper !== currentStatusUpper && incomingStatusUpper !== '') {
+            analysisResult.updatedRows.push({
+              key: incomingKey,
+              oldStatus: currentStatus || 'SIN ESTADO',
+              newStatus: incomingStatusUpper,
+              fullData: incoming
+            });
+          } else {
+            analysisResult.ignoredRows.push(incoming);
+          }
+        } else if (incomingKey) {
+          // Es un registro nuevo en la base
+          analysisResult.newRows.push({
+            key: incomingKey,
+            oldStatus: 'NO REGISTRADO EN BASE',
+            newStatus: incomingStatusUpper || 'PENDIENTE',
+            fullData: incoming
+          });
+        }
+      });
+
+      // 3. Forzar cambio de estado a 'TRANSFERIR' para registros que no figuran en Quantum
+      if (missingInQuantumOrders.length > 0) {
+        missingInQuantumOrders.forEach(order => {
+          const keyVal = getItemKeyValue(order, TARGET_KEY_COL);
+          const currentStatus = getItemStatusValue(order, TARGET_STATUS_COL) || 'PENDIENTE';
+          
+          // Actualizar en el objeto original
+          order.Estado = 'TRANSFERIR';
+          order.estado = 'TRANSFERIR';
+
+          // Verificar si ya existe en updatedRows o agregarlo
+          const existingUpdate = analysisResult.updatedRows.find(u => u.key.toLowerCase() === keyVal.toLowerCase());
+          if (existingUpdate) {
+            existingUpdate.newStatus = 'TRANSFERIR';
+            existingUpdate.fullData.Estado = 'TRANSFERIR';
+            existingUpdate.fullData.estado = 'TRANSFERIR';
+          } else if (keyVal) {
+            analysisResult.updatedRows.push({
+              key: keyVal,
+              oldStatus: currentStatus,
+              newStatus: 'TRANSFERIR',
+              fullData: { ...order, Estado: 'TRANSFERIR', estado: 'TRANSFERIR' }
+            });
+          }
+        });
+      }
+
+      progressBar.style.width = '100%';
+      progressStatus.innerText = 'Análisis finalizado';
+      progressPercent.innerText = '100%';
+
+      setTimeout(() => progressContainer.classList.add('hidden'), 800);
+
+      document.getElementById('stat-new-count').innerText = analysisResult.newRows.length;
+      document.getElementById('stat-updated-count').innerText = analysisResult.updatedRows.length;
+      document.getElementById('stat-ignored-count').innerText = analysisResult.ignoredRows.length;
+
+      updateUIWithAnalysis(sheetDataBase, parsedFileRows);
+      renderPreviewTable();
+      document.getElementById('summary-card').classList.remove('hidden');
+      
+      const hasChanges = (analysisResult.newRows.length > 0 || analysisResult.updatedRows.length > 0);
+      document.getElementById('btn-confirm-send').disabled = !hasChanges;
+    }
+
+    function renderPreviewTable() {
+      const tbody = document.getElementById('preview-table-body');
+      tbody.innerHTML = '';
+
+      // Mostrar únicamente los registros cuyo estado en la BASE sea DIFERENTE al estado del archivo cargado
+      const sampleList = [
+        ...analysisResult.updatedRows.map(r => ({
+          type: 'UPDATE',
+          key: r.key,
+          old: r.oldStatus,
+          new: r.newStatus,
+          desc: 'Cambio de Estado Detectado'
+        })),
+        ...analysisResult.newRows.map(r => ({
+          type: 'NEW',
+          key: r.key,
+          old: r.oldStatus || 'NO REGISTRADO EN BASE',
+          new: r.newStatus,
+          desc: 'Registro Nuevo (No existe en Base)'
+        }))
+      ];
+
+      if (sampleList.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-500 font-medium italic">No se detectaron diferencias entre el Estado de la base y el archivo cargado. Todos los estados coinciden.</td></tr>`;
+        return;
+      }
+
+      sampleList.forEach(item => {
+        const tr = document.createElement('tr');
+        const badge = item.type === 'NEW' 
+          ? `<span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-semibold text-[10px]">NUEVO</span>`
+          : `<span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-semibold text-[10px]">CAMBIO ESTADO</span>`;
+
+        tr.innerHTML = `
+          <td class="p-2">${badge}</td>
+          <td class="p-2 font-mono font-medium text-slate-700">${item.key}</td>
+          <td class="p-2 font-semibold text-rose-600 bg-rose-50/50 rounded">${item.old}</td>
+          <td class="p-2 font-semibold text-emerald-700 bg-emerald-50/50 rounded">${item.new}</td>
+          <td class="p-2 text-slate-500 text-[11px]">${item.desc}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function sendPayloadToGoogleSheets() {
+      const rowsToSend = [
+        ...analysisResult.newRows.map(n => n.fullData),
+        ...analysisResult.updatedRows.map(u => u.fullData)
+      ];
+
+      if (rowsToSend.length === 0) return;
+
+      const payload = {
+        keyColumn: TARGET_KEY_COL,
+        statusColumn: TARGET_STATUS_COL,
+        rows: rowsToSend
+      };
+
+      const btn = document.getElementById('btn-confirm-send');
+      btn.disabled = true;
+      btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> <span>Actualizando en BASE AI...</span>`;
+
+      updateSyncStatus('FETCHING');
+
+      try {
+        await fetch(APPS_SCRIPT_WEBHOOK, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        mergePayloadToLocal(rowsToSend);
+        showToast('Sincronización enviada con éxito a Google Sheets (BASE AI)', 'success');
+
+      } catch (err) {
+        console.error('Error al enviar:', err);
+        mergePayloadToLocal(rowsToSend);
+        showToast('Proceso de actualización local finalizado', 'info');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> <span>Confirmar y Sincronizar</span>`;
+        updateSyncStatus('ONLINE');
+        clearSelectedFile();
+      }
+    }
+
+    function mergePayloadToLocal(rows) {
+      const today = new Date().toISOString().split('T')[0];
+
+      rows.forEach(incoming => {
+        const keyVal = getItemKeyValue(incoming, TARGET_KEY_COL);
+        const existingIndex = sheetDataBase.findIndex(r => getItemKeyValue(r, TARGET_KEY_COL) === keyVal);
+
+        if (existingIndex !== -1) {
+          sheetDataBase[existingIndex] = { ...sheetDataBase[existingIndex], ...incoming, Fecha: today };
+        } else {
+          if (!incoming.Fecha) incoming.Fecha = today;
+          sheetDataBase.push(incoming);
+        }
+      });
+
+      // Refresca el Dashboard con los datos completos
+      renderDashboard();
+    }
+
+    // TAB DASHBOARD - Lee la información completa de la hoja BASE
+    function renderDashboard() {
+      const filterStatus = document.getElementById('dash-filter-status').value;
+      const filterPeriod = document.getElementById('dash-filter-period').value;
+
+      const statusSelect = document.getElementById('dash-filter-status');
+      const uniqueStatuses = [...new Set(sheetDataBase.map(d => getItemStatusValue(d, TARGET_STATUS_COL) || 'Sin Estado'))];
+      
+      const currentVal = statusSelect.value;
+      statusSelect.innerHTML = `<option value="ALL">Todos los Estados</option>`;
+      uniqueStatuses.forEach(st => {
+        const opt = document.createElement('option');
+        opt.value = st;
+        opt.textContent = st;
+        statusSelect.appendChild(opt);
+      });
+      statusSelect.value = currentVal;
+
+      let filteredData = [...sheetDataBase];
+      if (filterStatus !== 'ALL') {
+        filteredData = filteredData.filter(d => (getItemStatusValue(d, TARGET_STATUS_COL) || 'Sin Estado') === filterStatus);
+      }
+
+      const todayStr = new Date().toISOString().split('T')[0];
+      if (filterPeriod === 'TODAY') {
+        filteredData = filteredData.filter(d => d.Fecha === todayStr);
+      }
+
+      document.getElementById('dash-kpi-total').innerText = filteredData.length;
+      document.getElementById('dash-kpi-new').innerText = analysisResult.newRows ? analysisResult.newRows.length : 0;
+      document.getElementById('dash-kpi-updates').innerText = analysisResult.updatedRows ? analysisResult.updatedRows.length : 0;
+
+      const statusCounts = {};
+      filteredData.forEach(d => {
+        const s = getItemStatusValue(d, TARGET_STATUS_COL) || 'Sin Estado';
+        statusCounts[s] = (statusCounts[s] || 0) + 1;
+      });
+
+      let topStatus = '-';
+      let maxCount = 0;
+      Object.keys(statusCounts).forEach(s => {
+        if (statusCounts[s] > maxCount) {
+          maxCount = statusCounts[s];
+          topStatus = s;
+        }
+      });
+
+      const topPct = filteredData.length > 0 ? Math.round((maxCount / filteredData.length) * 100) : 0;
+      document.getElementById('dash-kpi-top-status').innerText = topStatus;
+      document.getElementById('dash-kpi-top-status-sub').innerText = `${topPct}% del total (${maxCount})`;
+
+      // Doughnut Chart con VALOR TOTAL Y CANTIDADES EN EL CENTRO DE LA DONA
+      const ctxStatus = document.getElementById('chart-status').getContext('2d');
+      if (chartStatusInstance) chartStatusInstance.destroy();
+
+      const chartLabels = Object.keys(statusCounts);
+      const chartValues = Object.values(statusCounts);
+      const totalSum = chartValues.reduce((a, b) => a + b, 0);
+
+      // Plugin personalizado para texto centrado
+      const centerTextPlugin = {
+        id: 'centerText',
+        afterDraw(chart) {
+          const { ctx, chartArea: { top, bottom, left, right, width, height } } = chart;
+          ctx.save();
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          
+          ctx.font = '900 22px Inter, sans-serif';
+          ctx.fillStyle = '#1e293b';
+          ctx.fillText(totalSum.toLocaleString(), left + width / 2, top + height / 2 - 6);
+
+          ctx.font = '600 10px Inter, sans-serif';
+          ctx.fillStyle = '#64748b';
+          ctx.fillText('TOTAL ÓRDENES', left + width / 2, top + height / 2 + 14);
+
+          ctx.restore();
+        }
+      };
+
+      chartStatusInstance = new Chart(ctxStatus, {
+        type: 'doughnut',
+        data: {
+          labels: chartLabels.length ? chartLabels : ['Sin Datos'],
+          datasets: [{
+            data: chartValues.length ? chartValues : [1],
+            backgroundColor: ['#2563eb', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#64748b'],
+            borderWidth: 2,
+            borderColor: '#ffffff',
+            cutout: '72%'
+          }]
+        },
+        plugins: [centerTextPlugin],
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } },
+            datalabels: {
+                color: '#ffffff',
+                font: { weight: 'bold', size: 10 },
+                formatter: (value) => (value > 0 ? value : ''),
+                anchor: 'center'
+            }
+          }
+        }
+      });
+
+      // Horizontal Bar Chart
+      renderCuadrillaChart(filteredData);
+
+      // Resumen Matriz por Cuadrilla (Basado en la hoja BASE)
+      const cuadrillaMap = {};
+      const allStatusesSet = new Set();
+
+      filteredData.forEach(d => {
+        let cuadrillaName = getItemCuadrillaValue(d);
+        if (!cuadrillaName) cuadrillaName = '(Vacío) No Asignado';
+        
+        const statusName = getItemStatusValue(d, TARGET_STATUS_COL) || 'Sin Estado';
+        allStatusesSet.add(statusName);
+
+        if (!cuadrillaMap[cuadrillaName]) cuadrillaMap[cuadrillaName] = {};
+        cuadrillaMap[cuadrillaName][statusName] = (cuadrillaMap[cuadrillaName][statusName] || 0) + 1;
+      });
+
+      renderMatrixTable(cuadrillaMap, Array.from(allStatusesSet));
+    }
+
+    function renderMatrixTable(cuadrillaMap, statusList) {
+      const thead = document.getElementById('matrix-head');
+      const tbody = document.getElementById('matrix-body');
+
+      thead.innerHTML = '';
+      tbody.innerHTML = '';
+
+      const trHead = document.createElement('tr');
+      trHead.innerHTML = `<th class="p-2 font-bold text-slate-800">Técnico / Cuadrilla</th>`;
+      statusList.forEach(st => {
+        trHead.innerHTML += `<th class="p-2 text-center font-bold text-slate-700">${st}</th>`;
+      });
+      trHead.innerHTML += `<th class="p-2 text-center font-bold text-slate-900 bg-slate-200/60">Total</th>`;
+      thead.appendChild(trHead);
+
+      const cuadrillas = Object.keys(cuadrillaMap);
+      if (cuadrillas.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="${statusList.length + 2}" class="p-3 text-center text-slate-400 italic">Sin datos disponibles</td></tr>`;
+        return;
+      }
+
+      cuadrillas.forEach(c => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50 transition-colors whitespace-nowrap';
+        let rowTotal = 0;
+
+        let cellsHtml = `<td class="p-2 font-semibold text-slate-800 flex items-center gap-1.5">
+          <i class="fa-solid fa-user-gear text-slate-400"></i> ${c}
+        </td>`;
+
+        statusList.forEach(st => {
+          const val = cuadrillaMap[c][st] || 0;
+          rowTotal += val;
+          cellsHtml += `<td class="p-2 text-center font-mono font-medium ${val > 0 ? 'text-slate-900 font-bold' : 'text-slate-300'}">${val}</td>`;
+        });
+
+        cellsHtml += `<td class="p-2 text-center font-mono font-bold text-brand-700 bg-brand-50/50">${rowTotal}</td>`;
+        tr.innerHTML = cellsHtml;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // Tab Navigation
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      document.getElementById(tabId).classList.remove('hidden');
+
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.className = 'tab-btn px-4 py-2 rounded-lg text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800 transition-all flex items-center gap-2';
+      });
+      const activeBtn = document.getElementById('nav-' + tabId);
+      if (activeBtn) {
+        activeBtn.className = 'tab-btn px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 bg-brand-600 text-white shadow';
+      }
+
+      document.querySelectorAll('.mobile-tab-btn').forEach(btn => {
+        btn.classList.remove('text-brand-400');
+        btn.classList.add('text-slate-400');
+      });
+      const mobileBtn = document.getElementById('mobile-' + tabId);
+      if (mobileBtn) {
+        mobileBtn.classList.remove('text-slate-400');
+        mobileBtn.classList.add('text-brand-400');
+      }
+
+      if (tabId === 'tab-dashboard') renderDashboard();
+    }
+
+    function updateSyncStatus(state) {
+      const dot = document.getElementById('sync-status-dot');
+      const text = document.getElementById('sync-status-text');
+
+      if (state === 'FETCHING') {
+        dot.className = 'w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping';
+        text.innerText = 'Consultando BASE...';
+      } else {
+        dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse';
+        text.innerText = 'Conectado y En Línea';
+      }
+    }
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      
+      let bg = 'bg-slate-900 text-white';
+      let icon = 'fa-circle-info';
+
+      if (type === 'success') { bg = 'bg-emerald-600 text-white'; icon = 'fa-circle-check'; }
+      if (type === 'error') { bg = 'bg-red-600 text-white'; icon = 'fa-triangle-exclamation'; }
+      if (type === 'info') { bg = 'bg-brand-600 text-white'; icon = 'fa-circle-info'; }
+
+      toast.className = `${bg} px-3.5 py-2.5 rounded-xl shadow-xl text-xs flex items-center gap-2.5 transition-all transform translate-y-2 pointer-events-auto`;
+      toast.innerHTML = `<i class="fa-solid ${icon} text-sm"></i><span>${message}</span>`;
+
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-4');
+        setTimeout(() => toast.remove(), 300);
+      }, 3500);
+    }
+  </script>
+</body>
+</html>
