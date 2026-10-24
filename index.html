@@ -501,7 +501,8 @@
     // Allowed status filters for the Cuadrilla Chart
     const TARGET_CUADRILLA_STATUSES = ['FINALIZADO', 'COMPLETADO', 'LIQUIDADO', 'EN CAMINO', 'EN PROCESO'];
 
-    let sheetDataBase = JSON.parse(localStorage.getItem('datasync_sheet_base')) || [];
+    // SIN CACHÉ LOCAL: La base inicia completamente vacía en cada ejecución
+    let sheetDataBase = [];
     let parsedFileRows = [];
     let missingInQuantumOrders = [];
     let unassignedOrders = [];
@@ -819,16 +820,60 @@
         const response = await fetch(`${APPS_SCRIPT_WEBHOOK}?action=read`);
         if (response.ok) {
           const remoteData = await response.json();
-          if (Array.isArray(remoteData) && remoteData.length > 0) {
+          // Soportar diferentes estructuras de respuesta de Apps Script
+          if (Array.isArray(remoteData)) {
             sheetDataBase = remoteData;
-            saveState();
+          } else if (remoteData && Array.isArray(remoteData.data)) {
+            sheetDataBase = remoteData.data;
+          } else if (remoteData && Array.isArray(remoteData.rows)) {
+            sheetDataBase = remoteData.rows;
+          } else if (remoteData && Array.isArray(remoteData.result)) {
+            sheetDataBase = remoteData.result;
+          } else {
+            sheetDataBase = [];
           }
+        } else {
+          sheetDataBase = [];
         }
       } catch (err) {
-        console.log('Utilizando base de datos local preexistente.');
+        console.log('Obteniendo registros de hoja remota o base limpia:', err);
+        sheetDataBase = [];
       } finally {
         updateSyncStatus('ONLINE');
       }
+    }
+
+    function getItemKeyValue(item, keyName) {
+      if (!item) return '';
+      const normalizedTarget = keyName.replace(/[\s_]+/g, '').toLowerCase();
+      for (let k of Object.keys(item)) {
+        if (k.replace(/[\s_]+/g, '').toLowerCase() === normalizedTarget) {
+          return String(item[k]).trim();
+        }
+      }
+      return '';
+    }
+
+    function getItemStatusValue(item, statusName) {
+      if (!item) return '';
+      const normalizedTarget = statusName.replace(/[\s_]+/g, '').toLowerCase();
+      for (let k of Object.keys(item)) {
+        if (k.replace(/[\s_]+/g, '').toLowerCase() === normalizedTarget) {
+          return String(item[k]).trim();
+        }
+      }
+      return '';
+    }
+
+    function getItemCuadrillaValue(item) {
+      if (!item) return '';
+      for (let k of Object.keys(item)) {
+        const normKey = k.replace(/[\s_]+/g, '').toLowerCase();
+        if (normKey === 'cuadrilla') {
+          return String(item[k]).trim();
+        }
+      }
+      return '';
     }
 
     async function analyzeAndSync() {
@@ -841,9 +886,13 @@
 
       progressContainer.classList.remove('hidden');
       progressBar.style.width = '30%';
-      progressStatus.innerText = 'Consultando registros vigentes en la hoja BASE...';
+      progressStatus.innerText = 'Consultando registros vigentes en la hoja BASE AI...';
       progressPercent.innerText = '30%';
 
+      // Reiniciar base de datos de Sheets en cero siempre antes de consultar
+      sheetDataBase = [];
+
+      // Consulta limpia a Google Sheets
       await fetchRemoteGoogleSheetData();
 
       progressBar.style.width = '70%';
@@ -858,19 +907,24 @@
         if (keyVal) currentMap.set(keyVal.toLowerCase(), row);
       });
 
-      // 1. Identify missing orders in Quantum upload
+      // 1. Identificar registros que están en Google Sheets pero ya no están en el nuevo archivo
+      // Si en Google Sheets hay 0 datos, no habrá ningún registro en missingInQuantumOrders
       const newUploadMap = new Map();
       parsedFileRows.forEach(row => {
         const keyVal = getItemKeyValue(row, TARGET_KEY_COL);
         if (keyVal) newUploadMap.set(keyVal.toLowerCase(), row);
       });
 
-      missingInQuantumOrders = sheetDataBase.filter(baseItem => {
-        const baseId = getItemKeyValue(baseItem, TARGET_KEY_COL);
-        return baseId && !newUploadMap.has(baseId.toLowerCase());
-      });
+      if (sheetDataBase.length > 0) {
+        missingInQuantumOrders = sheetDataBase.filter(baseItem => {
+          const baseId = getItemKeyValue(baseItem, TARGET_KEY_COL);
+          return baseId && !newUploadMap.has(baseId.toLowerCase());
+        });
+      } else {
+        missingInQuantumOrders = [];
+      }
 
-      // 2. Identify unassigned cuadrilla rows
+      // 2. Identificar filas sin cuadrilla asignada
       unassignedOrders = parsedFileRows.filter(item => {
         const cuadrilla = getItemCuadrillaValue(item);
         return !cuadrilla || cuadrilla.toUpperCase().trim() === 'VACIO' || cuadrilla.toUpperCase().trim() === 'SIN CUADRILLA';
@@ -894,7 +948,7 @@
             if (isAllowedStatus) {
               analysisResult.updatedRows.push({
                 key: incomingKey,
-                oldStatus: currentStatus || 'Sin Estado',
+                oldStatus: currentStatus || 'SIN ESTADO',
                 newStatus: incomingStatusUpper,
                 fullData: incoming
               });
@@ -902,11 +956,16 @@
               analysisResult.ignoredRows.push(incoming);
             }
           } else {
-            // Si el estado entrante es exactamente igual al de Sheets, se ignora por no presentar cambios
             analysisResult.ignoredRows.push(incoming);
           }
         } else if (incomingKey) {
-          analysisResult.newRows.push(incoming);
+          // Es un registro nuevo en la base
+          analysisResult.newRows.push({
+            key: incomingKey,
+            oldStatus: 'NO REGISTRADO EN BASE',
+            newStatus: incomingStatusUpper || 'PENDIENTE',
+            fullData: incoming
+          });
         }
       });
 
@@ -932,25 +991,26 @@
       const tbody = document.getElementById('preview-table-body');
       tbody.innerHTML = '';
 
+      // Mostrar únicamente los registros cuyo estado en la BASE sea DIFERENTE al estado del archivo cargado
       const sampleList = [
-        ...analysisResult.newRows.slice(0, 5).map(r => ({
-          type: 'NEW',
-          key: getItemKeyValue(r, TARGET_KEY_COL) || 'N/A',
-          old: '-',
-          new: getItemStatusValue(r, TARGET_STATUS_COL) || '-',
-          desc: 'Registro Nuevo'
-        })),
-        ...analysisResult.updatedRows.slice(0, 5).map(r => ({
+        ...analysisResult.updatedRows.map(r => ({
           type: 'UPDATE',
           key: r.key,
           old: r.oldStatus,
           new: r.newStatus,
-          desc: 'Actualización Permitida'
+          desc: 'Cambio de Estado Detectado'
+        })),
+        ...analysisResult.newRows.map(r => ({
+          type: 'NEW',
+          key: r.key,
+          old: r.oldStatus || 'NO REGISTRADO EN BASE',
+          new: r.newStatus,
+          desc: 'Registro Nuevo (No existe en Base)'
         }))
       ];
 
       if (sampleList.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="p-3 text-center text-slate-400 italic">No hay modificaciones válidas para procesar.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-500 font-medium italic">No se detectaron diferencias entre el Estado de la base y el archivo cargado. Todos los estados coinciden.</td></tr>`;
         return;
       }
 
@@ -958,14 +1018,14 @@
         const tr = document.createElement('tr');
         const badge = item.type === 'NEW' 
           ? `<span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-semibold text-[10px]">NUEVO</span>`
-          : `<span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-semibold text-[10px]">ACTUALIZAR</span>`;
+          : `<span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-semibold text-[10px]">CAMBIO ESTADO</span>`;
 
         tr.innerHTML = `
           <td class="p-2">${badge}</td>
           <td class="p-2 font-mono font-medium text-slate-700">${item.key}</td>
-          <td class="p-2 text-slate-400">${item.old}</td>
-          <td class="p-2 font-semibold text-slate-800">${item.new}</td>
-          <td class="p-2 text-slate-500">${item.desc}</td>
+          <td class="p-2 font-semibold text-rose-600 bg-rose-50/50 rounded">${item.old}</td>
+          <td class="p-2 font-semibold text-emerald-700 bg-emerald-50/50 rounded">${item.new}</td>
+          <td class="p-2 text-slate-500 text-[11px]">${item.desc}</td>
         `;
         tbody.appendChild(tr);
       });
@@ -973,7 +1033,7 @@
 
     async function sendPayloadToGoogleSheets() {
       const rowsToSend = [
-        ...analysisResult.newRows,
+        ...analysisResult.newRows.map(n => n.fullData),
         ...analysisResult.updatedRows.map(u => u.fullData)
       ];
 
@@ -1029,8 +1089,7 @@
         }
       });
 
-      saveState();
-      // Refresca el Dashboard con los datos completos y actualizados de la HOJA BASE
+      // Refresca el Dashboard con los datos completos
       renderDashboard();
     }
 
@@ -1242,10 +1301,6 @@
         dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse';
         text.innerText = 'Conectado y En Línea';
       }
-    }
-
-    function saveState() {
-      localStorage.setItem('datasync_sheet_base', JSON.stringify(sheetDataBase));
     }
 
     function showToast(message, type = 'info') {
